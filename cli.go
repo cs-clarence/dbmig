@@ -50,8 +50,9 @@ func (n *NewCmd) Run() error {
 	}
 
 	mig, sum, err := CreateNewMigration(n.MigrationName, *config)
-	if err != nil {
-		return err
+	if errors.Is(err, ErrMigrationNameUsed) {
+		fmt.Fprintf(os.Stderr, "%s: %v\n", n.MigrationName, err)
+		return nil
 	}
 
 	upFP := filepath.Join(

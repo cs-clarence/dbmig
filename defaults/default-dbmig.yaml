@@ -1,7 +1,7 @@
 dbmig:
   # The type of version to prepend to migration files
   # Accepted values: timestamp or serialint
-  # timestamp: the version will be a timestamp in format of year, month, day, hour, second, millisecond, and microsecond
+  # timestamp: the version will be a timestamp in format of year, month, day, hour, second, millisecond, and microsecond based on UTC
   # serialint: the value will be a sequence of integers starting from 1
   versioning: timestamp
 
