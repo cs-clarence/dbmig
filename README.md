@@ -1,6 +1,8 @@
 # dbmig
 
-Create migration files
+It creates migration files.
+It doesn't create the content of those migration files.
+It merely creates the files and you fill the content of those files.
 
 ## Usage:
 
