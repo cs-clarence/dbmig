@@ -5,5 +5,5 @@ dbmig:
   # serialint: the value will a sequence of integers starting from 1
   versioning: timestamp
 
-  # Where to create migration files
+  # Where to find and create migration files
   migration-files: ./migration

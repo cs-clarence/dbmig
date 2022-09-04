@@ -1,18 +1,20 @@
 package main
 
 import (
-	"embed"
+	"bytes"
+	"errors"
 	"fmt"
-	"log"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
-)
 
-//go:embed default-dbmig.yaml default-summary.yaml
-var DefaultsFS embed.FS
+	"github.com/alecthomas/kong"
+	"github.com/cs-clarence/dbmig/defaults"
+	"github.com/go-yaml/yaml"
+)
 
 type Config struct {
 	DBMig struct {
@@ -21,62 +23,136 @@ type Config struct {
 	} `yaml:"dbmig"`
 }
 
-func InitDBMigProject(c Config) {
-	file, err := os.Create("dbmig.yaml")
-	if err != nil {
-		log.Fatalf("Error when trying to create dbmig.yaml file: %v", err)
-	}
-	defaultDBMig, _ := DefaultsFS.Open("default-dbmig.yaml")
-
-	buff := make([]byte, 1000)
-	defaultDBMig.Read(buff)
-	_, err = file.Write(buff)
-
-	if err != nil {
-		log.Fatalf("Error when writing to dbmig.yaml: %v", err)
-	}
-	file.Close()
-}
-
-type Migration struct {
-	Name    string `yaml:"name"`
-	Version uint   `yaml:"version"`
-}
-
 type MigrationFilesSummary struct {
 	Summary struct {
-		LatestVersion uint        `yaml:"latest-version"`
+		LatestVersion uint64      `yaml:"latest-version"`
 		Migrations    []Migration `yaml:"migrations"`
 	} `yaml:"summary"`
 }
 
-func CreateNewMigration(name string, c Config) {
+type Migration struct {
+	Name    string `yaml:"name"`
+	Version uint64 `yaml:"version"`
+}
+
+func PathExists(f string) bool {
+	if _, err := os.Stat(f); errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+
+	return true
+}
+
+func FileReadToEnd(file fs.File) ([]byte, error) {
+	buffer := new(bytes.Buffer)
+	_, err := io.Copy(buffer, file)
+	if err != nil {
+		return nil, err
+	}
+	return buffer.Bytes(), nil
+}
+
+func InitDBMigProject(path string) error {
+	fp := filepath.Join(path, "/dbmig.yaml")
+	// Does file already exist?
+	if PathExists(fp) {
+		// If yes, then the project is already initialized, so exit early
+		fmt.Println("Project is already initialized")
+		return nil
+	}
+
+	file, err := os.Create("dbmig.yaml")
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	defaultDBMig, _ := defaults.FS.Open("default-dbmig.yaml")
+
+	buff, err := FileReadToEnd(defaultDBMig)
+	if err != nil {
+		return err
+	}
+
+	_, err = file.Write(buff)
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func CreateNewMigration(name string, c Config) (*Migration, *MigrationFilesSummary, error) {
+	if !PathExists(c.DBMig.MigrationFiles) {
+		err := os.Mkdir(c.DBMig.MigrationFiles, os.ModePerm)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
 	yamlFP := filepath.Join(c.DBMig.MigrationFiles, "/summary.yaml")
 	sumFile, err := os.Open(yamlFP)
 	if err != nil {
 		sumFile, err = os.Create(yamlFP)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		defSum, err := defaults.FS.Open("default-summary.yaml")
+		if err != nil {
+			return nil, nil, err
+		}
+		defer defSum.Close()
+
+		_, err = io.Copy(sumFile, defSum)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	defer sumFile.Close()
+
+	buff, err := FileReadToEnd(sumFile)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	buff := make([]byte, 1000)
+	sum := &MigrationFilesSummary{}
+	err = yaml.Unmarshal(buff, sum)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	sumFile.Read(buff)
-
-	sb := strings.Builder{}
-
-	sum := MigrationFilesSummary{}
+	var version uint64
 
 	switch c.DBMig.Versioning {
 	case "serialint":
-		sb.WriteString(strconv.Itoa(int(sum.Summary.LatestVersion)))
+		version = sum.Summary.LatestVersion
+		version++
 	case "timestamp":
 		now := time.Now().UTC()
-		sb.WriteString(now.Format("200601021504"))
-		sb.WriteString(fmt.Sprintf("%-9d", now.Nanosecond()))
+		timeStr := now.Format("200601021504")
+		version, _ = strconv.ParseUint(timeStr, 10, 64)
 	default:
-		log.Fatalf("Invalid versioning value, acceptable are timestamp or serialint")
+		return nil, nil, fmt.Errorf(
+			"dbmig.yaml: Invalid versioning value, acceptable are timestamp or serialint",
+		)
 	}
-	sb.WriteString("_" + name + "_")
+
+	m := Migration{
+		Name:    name,
+		Version: version,
+	}
+
+	sum.Summary.LatestVersion = version
+	sum.Summary.Migrations = append(sum.Summary.Migrations, m)
+
+	return &m, sum, nil
 }
 
 func main() {
+	var cli CLI
+	ctx := kong.Parse(&cli)
+
+	if err := ctx.Run(); err != nil {
+		panic(err)
+	}
 }
