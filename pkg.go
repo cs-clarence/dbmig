@@ -32,8 +32,9 @@ type MigrationFilesSummary struct {
 }
 
 type Migration struct {
-	Name    string `yaml:"name"`
-	Version uint64 `yaml:"version"`
+	Name      string `yaml:"name"`
+	Version   uint64 `yaml:"version"`
+	CreatedAt string `yaml:"created_at"`
 }
 
 func PathExists(f string) bool {
@@ -131,25 +132,26 @@ func CreateNewMigration(name string, c Config) (*Migration, *MigrationFilesSumma
 
 	var version uint64
 
+	utcNow := time.Now().UTC()
 	switch c.DBMig.Versioning {
 	case "serialint":
 		version = sum.Summary.LatestVersion
 		version++
 	case "timestamp":
-		now := time.Now().UTC()
-		timeStr := now.Format("200601021504")
-		us := fmt.Sprintf("%-6d", now.Nanosecond()/1000)
+		timeStr := utcNow.Format("200601021504")
+		us := fmt.Sprintf("%-6d", utcNow.Nanosecond()/1000)
 		timeStr += us
 		version, _ = strconv.ParseUint(timeStr, 10, 64)
 	default:
 		return nil, nil, fmt.Errorf(
-			"dbmig.yaml: Invalid versioning value, acceptable are timestamp or serialint",
+			"dbmig.yaml: Invalid versioning value, acceptable are \"timestamp\" or \"serialint\"",
 		)
 	}
 
 	m := Migration{
-		Name:    name,
-		Version: version,
+		Name:      name,
+		Version:   version,
+		CreatedAt: utcNow.Format(time.RFC3339Nano),
 	}
 
 	sum.Summary.LatestVersion = version

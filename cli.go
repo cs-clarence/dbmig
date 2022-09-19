@@ -67,12 +67,32 @@ func (n *NewCmd) Run() error {
 
 	sumFP := filepath.Join(config.DBMig.MigrationFiles, "summary.yaml")
 
-	if _, err := os.Create(upFP); err != nil {
+	if file, err := os.Create(upFP); err != nil {
 		return err
+	} else {
+		_, err = file.Write([]byte(fmt.Sprintf(`-- Name: %s
+-- Version: %d
+-- Type: Upgrade
+-- Created At (UTC): %s
+`, mig.Name, mig.Version, mig.CreatedAt,
+		)))
+		if err != nil {
+			return err
+		}
 	}
 
-	if _, err := os.Create(downFP); err != nil {
+	if file, err := os.Create(downFP); err != nil {
 		return err
+	} else {
+		_, err = file.Write([]byte(fmt.Sprintf(`-- Name: %s
+-- Version: %d
+-- Type: Downgrade
+-- Created At (UTC): %s
+`, mig.Name, mig.Version, mig.CreatedAt,
+		)))
+		if err != nil {
+			return err
+		}
 	}
 
 	if sumFile, err := os.Create(sumFP); err == nil {
