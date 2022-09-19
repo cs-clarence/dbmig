@@ -15,7 +15,7 @@ type CLI struct {
 }
 
 type InitCmd struct {
-	Path string `kong:"arg,name='path',help='The directory of the project',type='path'"`
+	Path string `kong:"arg,optional,default='.',name='path',help='The directory of the project',type='path'"`
 }
 
 type NewCmd struct {

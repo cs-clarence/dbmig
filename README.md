@@ -9,13 +9,13 @@ It merely creates the files and you fill the content of those files.
 - Initialize the current working directory
 
   ```bash
-  go run -mod=mod github.com/cs-clarence/dbmig init .
+  go run -mod=mod github.com/cs-clarence/dbmig init
   ```
 
   or (if you `go install` the package)
 
   ```bash
-  dbmig init .
+  dbmig init
   ```
 
 - Creating a new migration (substitute `<name>`)
